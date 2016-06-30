@@ -1,87 +1,87 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
   
-  "Description" : "This is for interview with AMP <francis_naoum@amp.com.au> version 1.0",
+  "Description": "THIS IS FOR INTERVIEW WITH AMP <francis_naoum@amp.com.au> VERSION 1.1",
   
-  "Parameters" : {
+  "Parameters": {
   
     "KeyName": {
-      "Description" : "Existing EC2 Key Pair to enable SSH access to the instances",
+      "Description": "Existing EC2 Key Pair to enable SSH access to the instances",
       "Type": "AWS::EC2::KeyPair::KeyName",
-      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+      "ConstraintDescription": "MUST BE THE NAME OF AN EXISTING EC2 KEYPAIR!"
     },
 	
-    "InstanceType" : {
-      "Description" : "WebServer EC2 instance type",
-      "Type" : "String",
-      "Default" : "t1.micro",
-      "AllowedValues" : [ "t1.micro"],
-      "ConstraintDescription" : "must be a valid EC2 instance type."
+    "InstanceType": {
+      "Description": "WebServer EC2 instance type",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": [ "t2.micro" ],
+      "ConstraintDescription": "MUST BE THE VALID EC2 INSTANCE TYPE!"
     }
   },
   
-  "Mappings" : {
+  "Mappings": {
   
-    "AWSInstanceType2Arch" : {
-      "t1.micro"    : { "Arch" : "PV64"   }
+    "AWSInstanceType2Arch": {
+      "t2.micro": { "Arch": "HVM64" }
     },
 	
-    "AWSRegionArch2AMI" : {
-      "ap-southeast-2"   : {"PV64" : "ami-dc361ebf"}
+    "AWSRegionArch2AMI": {
+      "ap-southeast-2": { "HVM64": "ami-dc361ebf" }
     }
   },
   
-  "Resources" : {
+  "Resources": {
   
-    "NodejsServerSecurityGroup" : {
-      "Type" : "AWS::EC2::SecurityGroup",
-      "Properties" : {
-        "GroupDescription" : "Enable HTTP 8080 + SSH 22 from anywhere",
-        "SecurityGroupIngress" : [
-          {"IpProtocol" : "tcp",
-          "FromPort" : "8080",
-          "ToPort" : "8080",
-          "CidrIp" : "0.0.0.0/0"},
-          {"IpProtocol" : "tcp",
-          "FromPort" : "22",
-          "ToPort" : "22",
-          "CidrIp" : "0.0.0.0/0"}
+    "NodejsServerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable HTTP 8080 + SSH 22 from anywhere",
+        "SecurityGroupIngress": [
+          {"IpProtocol": "tcp",
+          "FromPort": "8080",
+          "ToPort": "8080",
+          "CidrIp": "0.0.0.0/0"},
+          {"IpProtocol": "tcp",
+          "FromPort": "22",
+          "ToPort": "22",
+          "CidrIp": "0.0.0.0/0"}
         ]
       }
     },
 	
     "NodejsServer": {
-      "Type" : "AWS::EC2::Instance",
+      "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
-                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
-        "InstanceType"   : { "Ref" : "InstanceType" },
-        "SecurityGroups" : [ {"Ref" : "NodejsServerSecurityGroup"} ],
-        "KeyName"        : { "Ref" : "KeyName" },
-        "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+        "ImageId": { "Fn::FindInMap": [ "AWSRegionArch2AMI", { "Ref": "AWS::Region" },
+                   { "Fn::FindInMap": [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+        "InstanceType": { "Ref": "InstanceType" },
+        "SecurityGroups": [ {"Ref": "NodejsServerSecurityGroup"} ],
+        "KeyName": { "Ref": "KeyName" },
+        "UserData": { "Fn::Base64": { "Fn::Join": ["", [
                        "#!/bin/bash\n",
                        "sudo yum -y update\n",
                        "sudo yum -y install docker\n",
                        "sudo gpasswd -a ec2-user docker\n",
+					   "su - ec2-user; id\n",
                        "sudo service docker restart\n",
-                       "su - ec2-user; id\n",
                        "docker pull google/nodejs-hello\n",
-                       "docker run -p 8080 -d google/nodejs-hello\n"
+                       "docker run -p 8080 --restart=\"always\" -d google/nodejs-hello\n"
         ]]}}
       },
 	  
-      "CreationPolicy" : {
-        "ResourceSignal" : {
-          "Timeout" : "PT5M"
+      "CreationPolicy": {
+        "ResourceSignal": {
+          "Timeout": "PT15M"
         }
       }
     }
   },
   
-  "Outputs" : {
-    "NodejsURL" : {
-      "Value" : { "Fn::Join" : ["", ["http://", { "Fn::GetAtt" : [ "NodejsServer", "PublicDnsName" ]}, ":8080" ]]},
-      "Description" : "Node.js Hello World inside Docker!"
+  "Outputs": {
+    "NodejsURL": {
+      "Value": { "Fn::Join" : ["", ["http://", { "Fn::GetAtt" : [ "NodejsServer", "PublicDnsName" ]}, ":8080" ]]},
+      "Description": "NODE.JS HELLO WORLD INSIDE DOCKER!"
     }
   }
 }
