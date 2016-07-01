@@ -1,87 +1,135 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
   
-  "Description": "THIS IS FOR INTERVIEW WITH AMP <francis_naoum@amp.com.au> VERSION 1.1",
+  "Description": "THIS IS FOR INTERVIEW WITH AMP <francis_naoum@amp.com.au> VERSION 1.2",
   
   "Parameters": {
   
     "KeyName": {
-      "Description": "Existing EC2 Key Pair to enable SSH access to the instances",
-      "Type": "AWS::EC2::KeyPair::KeyName",
-      "ConstraintDescription": "MUST BE THE NAME OF AN EXISTING EC2 KEYPAIR!"
-    },
-	
-    "InstanceType": {
-      "Description": "WebServer EC2 instance type",
-      "Type": "String",
-      "Default": "t2.micro",
-      "AllowedValues": [ "t2.micro" ],
-      "ConstraintDescription": "MUST BE THE VALID EC2 INSTANCE TYPE!"
+     "Description": "Existing EC2 Key Pair to enable SSH access to the instances",
+     "Type": "AWS::EC2::KeyPair::KeyName",
+     "ConstraintDescription": "MUST BE THE NAME OF AN EXISTING EC2 KEYPAIR!"
     }
   },
   
   "Mappings": {
-  
-    "AWSInstanceType2Arch": {
-      "t2.micro": { "Arch": "HVM64" }
-    },
-	
-    "AWSRegionArch2AMI": {
-      "ap-southeast-2": { "HVM64": "ami-dc361ebf" }
-    }
   },
-  
-  "Resources": {
-  
-    "NodejsServerSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupDescription": "Enable HTTP 8080 + SSH 22 from anywhere",
-        "SecurityGroupIngress": [
-          {"IpProtocol": "tcp",
-          "FromPort": "8080",
-          "ToPort": "8080",
-          "CidrIp": "0.0.0.0/0"},
-          {"IpProtocol": "tcp",
-          "FromPort": "22",
-          "ToPort": "22",
-          "CidrIp": "0.0.0.0/0"}
+
+  "Resources" : {
+    "NodejsSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable HTTP access via port 8080 locked down to the load balancer + SSH access",
+        "SecurityGroupIngress" : [
+          {"IpProtocol" : "tcp", "FromPort" : "8080", "ToPort" : "8080", "CidrIp" : "0.0.0.0/0"},
+          {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : "0.0.0.0/0"}
         ]
       }
     },
 	
-    "NodejsServer": {
-      "Type": "AWS::EC2::Instance",
+    "ElasticLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
       "Properties": {
-        "ImageId": { "Fn::FindInMap": [ "AWSRegionArch2AMI", { "Ref": "AWS::Region" },
-                   { "Fn::FindInMap": [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
-        "InstanceType": { "Ref": "InstanceType" },
-        "SecurityGroups": [ {"Ref": "NodejsServerSecurityGroup"} ],
-        "KeyName": { "Ref": "KeyName" },
-        "UserData": { "Fn::Base64": { "Fn::Join": ["", [
-                       "#!/bin/bash\n",
-                       "sudo yum -y update\n",
-                       "sudo yum -y install docker\n",
+	    "AvailabilityZones" : { "Fn::GetAZs" : "" },
+	    "Instances": { "Ref": "Nodejs" },
+        "Listeners": [ {
+          "LoadBalancerPort": "80",
+          "InstancePort": "8080",
+          "Protocol": "HTTP"
+        } ],
+        "HealthCheck": {
+          "Target": "HTTP:8080/",
+          "HealthyThreshold": "2",
+          "UnhealthyThreshold": "10",
+          "Interval": "30",
+          "Timeout": "5"
+        }
+	  }
+	},
+
+    "Nodejs": {
+      "Type" : "AWS::EC2::Instance",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "configSets" : {
+            "install" : ["install_cfn"]
+          },
+          "install_cfn" : {
+            "files": {
+              "/etc/cfn/cfn-hup.conf": {
+                "content": { "Fn::Join": [ "", [
+                  "[main]\n",
+                  "stack=", { "Ref": "AWS::StackId" }, "\n",
+                  "region=ap-southeast-2\n"
+                ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              },
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                "content": { "Fn::Join": [ "", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.Nodejs.Metadata.AWS::CloudFormation::Init\n",
+                  "action=/opt/aws/bin/cfn-init -v ",
+                          "         --stack ", { "Ref" : "AWS::StackName" },
+                          "         --resource Nodejs ",
+                          "         --region ap-southeast-2\n",
+				  "runas=root\n"
+                ]]},          
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              }
+            },
+            "services" : {
+              "sysvinit" : {
+                "cfn-hup" : { "enabled" : "true", "ensureRunning" : "true",
+                              "files" : ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"] }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId" : "ami-dc361ebf",
+        "InstanceType"   : "t2.micro",
+        "SecurityGroups" : [ {"Ref" : "NodejsSecurityGroup"} ],
+        "KeyName"        : { "Ref" : "KeyName" },
+        "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+                       "#!/bin/bash -xe\n",
+                       "sudo yum update -y aws-cfn-bootstrap\n",
+
+                       "sudo /opt/aws/bin/cfn-init -v ",
+                       "         --stack ", { "Ref" : "AWS::StackName" },
+                       "         --resource Nodejs ",
+                       "         --region ap-southeast-2\n",
+
+                       "sudo /opt/aws/bin/cfn-signal -e $? ",
+                       "         --stack ", { "Ref" : "AWS::StackName" },
+                       "         --resource Nodejs ",
+                       "         --region ap-southeast-2\n",
+					   
+					   "sudo yum -y install docker\n",
                        "sudo gpasswd -a ec2-user docker\n",
-					   "su - ec2-user; id\n",
+					   "sudo su ec2-user\n",
                        "sudo service docker restart\n",
-                       "docker pull google/nodejs-hello\n",
-                       "docker run -p 8080 --restart=\"always\" -d google/nodejs-hello\n"
+                       "docker pull luckylittle/aws-cloudformation-nodejs\n",
+                       "docker run -p 8080:8080 -d luckylittle/aws-cloudformation-nodejs\n"
         ]]}}
       },
-	  
-      "CreationPolicy": {
-        "ResourceSignal": {
-          "Timeout": "PT15M"
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
         }
       }
     }
   },
-  
-  "Outputs": {
-    "NodejsURL": {
-      "Value": { "Fn::Join" : ["", ["http://", { "Fn::GetAtt" : [ "NodejsServer", "PublicDnsName" ]}, ":8080" ]]},
-      "Description": "NODE.JS HELLO WORLD INSIDE DOCKER!"
+
+  "Outputs" : {
+    "WebsiteURL" : {
+      "Value" : { "Fn::Join" : ["", ["http://", { "Fn::GetAtt" : [ "ElasticLoadBalancer", "DNSName" ]}, "/" ]]},
+      "Description": "NODE.JS HELLO WORLD INSIDE DOCKER BEHIND ELB!"
     }
   }
 }
