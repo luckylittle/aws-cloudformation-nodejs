@@ -1,29 +1,37 @@
-### Synopsis
-2016-07-01
+### Synopsis:
+__2016-07-02__
+__Latest version: 1.5__
+This was created for an interview with Francis Naoum from AMP.
 
-This is for interview with Francis Naoum.
+### Task:
+Compose the Amazon Web Services CloudFormation template that will create a stack running one Elastic Compute Cloud instance behind one Elastic Load Balancer. Simple Node.js "Hello World" container running in Docker will be listening on this instance. The stack must be also highly secure with no unnecessary ports open to the world.
 
-CloudFormation JSON template spins up amzn-ami-hvm-2016.03.3.x86_64-gp2 (ami-dc361ebf) on t2.micro instance in Sydney region behind ELB with security group only allowing SSH/22 and HTTP/8080 inbound. As a part of user data, it will perform the following bootstraping:
+### Solution:
+1. Download raw **interview.json** from here.
+2. Go to Amazon Web Services console --> CloudFormation --> Create New Stack --> Upload a template to Amazon S3 --> **interview.json** --> Next --> Stack name: [ XXX ] --> KeyName: [ XXX ] --> Next --> Key: [ XXX ] --> Value: [ XXX ] --> Next --> Create.
+3. Wait 186 seconds for the following resources to be completed:
+   * AWS::ElasticLoadBalancing::LoadBalancer
+   * AWS::EC2::SecurityGroup
+   * AWS::AutoScaling::LaunchConfiguration
+   * AWS::AutoScaling::AutoScalingGroup
+4. Click on Outputs --> WebsiteURL value to obtain ELB's DNS name.
 
-### Code
+### Bootstraping code:
 ```sh
-$ sudo yum -y update
-$ sudo yum -y install docker                                        #install Docker v1.11.1
-$ sudo gpasswd -a ec2-user docker                                   #add ec2-user to the docker group
-$ sudo su ec2-user                                                  #workaround for logout/login after user added to the group
-$ sudo service docker restart                                       #restarting the service after the workaround
-$ docker pull luckylittle/aws-cloudformation-nodejs                 #download image
-$ docker run -p 8080:8080 -d luckylittle/aws-cloudformation-nodejs  #run container in the background and map port 8080
+$ sudo yum update -y aws-cfn-bootstrap                              # update AWS CloudFormation Helper Scripts
+$ sudo yum -y install docker                                        # install Docker (currently v1.11.1)
+$ sudo gpasswd -a ec2-user docker                                   # add ec2-user to the docker group
+$ sudo su ec2-user                                                  # workaround for logout/login after ec2-user added to the group
+$ sudo service docker restart                                       # restarting the Docker service after the previous workaround
+$ docker pull luckylittle/aws-cloudformation-nodejs                 # download Node.js image from my Docker Hub repo
+$ docker run -p 8080:8080 -d luckylittle/aws-cloudformation-nodejs  # run container in the background and map port 8080
 ```
 
-### Result
+### Testing:
 ```sh
-curl http://<ELB-public-IP-address>/
+$ curl http://<ELB-public-IP-address>/
 ```
-will show message 'Hello world and Francis Naoum!'
-
-### Installation
-Amazon Web Services console --> CloudFormation --> Create New Stack --> Upload a template to Amazon S3 --> 'interview.json.template' --> Next --> Stack name: [    ] --> InstanceType: t2.micro --> KeyName: [    ] --> Next --> Key: [    ] --> Value: [    ] --> Next --> Create
+This will show message **Hello world and Francis Naoum!**
 
 ### Contributors
-Lucian Maly <lucian.maly@oracle.com>
+Lucian Maly <<lucian.maly@oracle.com>>
