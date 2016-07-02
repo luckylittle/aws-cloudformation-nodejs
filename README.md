@@ -1,4 +1,3 @@
-### Synopsis:
 2016-07-02
 ---
 Latest version: 1.5
