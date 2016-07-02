@@ -1,7 +1,7 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
   
-  "Description": "THIS IS FOR INTERVIEW WITH AMP <francis_naoum@amp.com.au> VERSION 1.4",
+  "Description": "THIS IS FOR INTERVIEW WITH AMP <francis_naoum@amp.com.au> VERSION 1.5",
   
   "Parameters": {
     "KeyName": {
@@ -18,7 +18,7 @@
     "ELB": {
       "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
       "Properties": {
-	    "CrossZone": "true",
+      "CrossZone": "true",
         "AvailabilityZones": {"Fn::GetAZs": ""},
         "Listeners": [{
           "LoadBalancerPort": "80",
@@ -32,52 +32,51 @@
           "Interval": "30",
           "Timeout": "5"
         }
-	  }
-	},
+      }
+    },
 
-	"NodejsSecurityGroup": {
-	  "Type": "AWS::EC2::SecurityGroup",
-	  "Properties": {
-	  "GroupDescription": "Enable HTTP access via port 8080 locked down to the ELB and SSH access",
-      "SecurityGroupIngress": [{"IpProtocol" : "tcp", "FromPort" : "8080", "ToPort" : "8080", "SourceSecurityGroupOwnerId" : {"Fn::GetAtt" : ["ELB", "SourceSecurityGroup.OwnerAlias"]},"SourceSecurityGroupName" : {"Fn::GetAtt" : ["ELB", "SourceSecurityGroup.GroupName"]}}]
-	      }
+    "NodejsSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+      "GroupDescription": "Enable HTTP access via port 8080 locked down to the ELB and SSH access",
+      "SecurityGroupIngress": [{"IpProtocol": "tcp", "FromPort": "8080", "ToPort": "8080", "SourceSecurityGroupOwnerId": {"Fn::GetAtt": ["ELB", "SourceSecurityGroup.OwnerAlias"]}, "SourceSecurityGroupName": {"Fn::GetAtt": ["ELB", "SourceSecurityGroup.GroupName"]}}]}
     },
 	
-	"ServerGroup": {
+    "ServerGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
-      "Properties": {
-        "AvailabilityZones": { "Fn::GetAZs": "" },
-        "LaunchConfigurationName": { "Ref": "Nodejs" },
+        "Properties": {
+        "AvailabilityZones": {"Fn::GetAZs": ""},
+        "LaunchConfigurationName": {"Ref": "Nodejs"},
         "MinSize": "1",
         "MaxSize": "1",
-        "LoadBalancerNames" : [ { "Ref" : "ELB" } ]
-      },
-      "CreationPolicy" : {
-        "ResourceSignal" : {
-          "Timeout" : "PT5M",
-          "Count"   : "1"
-        }
+        "LoadBalancerNames": [{"Ref": "ELB"}]
+        },
+     "CreationPolicy": {
+       "ResourceSignal": {
+       "Timeout": "PT5M",
+       "Count": "1"
+       }
       },
       "UpdatePolicy": {
         "AutoScalingRollingUpdate": {
-          "MinInstancesInService": "1",
-          "MaxBatchSize": "1",
-          "PauseTime" : "PT15M",
-          "WaitOnResourceSignals": "true"
+        "MinInstancesInService": "1",
+        "MaxBatchSize": "1",
+        "PauseTime": "PT15M",
+        "WaitOnResourceSignals": "true"
         }
       }
     },
 	      
     "Nodejs": {
-      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Metadata": {
         "AWS::CloudFormation::Init": {
           "config": {
             "files": {
               "/etc/cfn/cfn-hup.conf": {
-                "content": { "Fn::Join": [ "", [
+                "content": {"Fn::Join": [ "", [
                   "[main]\n",
-                  "stack=", { "Ref": "AWS::StackId" }, "\n",
+                  "stack=", {"Ref": "AWS::StackId"}, "\n",
                   "region=ap-southeast-2\n"
                 ]]},
                 "mode": "000400",
@@ -102,8 +101,7 @@
             },
             "services": {
               "sysvinit": {
-                "cfn-hup": { "enabled": "true", "ensureRunning": "true",
-                              "files": ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"] }
+                "cfn-hup": {"enabled": "true", "ensureRunning": "true", "files": ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"]}
               }
             }
           }
@@ -113,32 +111,32 @@
         "ImageId": "ami-dc361ebf",
         "InstanceType": "t2.micro",
         "SecurityGroups": [{"Ref": "NodejsSecurityGroup"}],
-        "KeyName": { "Ref" : "KeyName" },
-        "UserData": { "Fn::Base64" : { "Fn::Join" : ["", [
+        "KeyName": {"Ref": "KeyName"},
+        "UserData": {"Fn::Base64": { "Fn::Join": ["", [
                        "#!/bin/bash\n",
                        "sudo yum update -y aws-cfn-bootstrap\n",
                        "sudo /opt/aws/bin/cfn-init -v ",
-                       " --stack ", { "Ref" : "AWS::StackName" },
+                       " --stack ", {"Ref": "AWS::StackName"},
                        " --resource Nodejs",
                        " --region ap-southeast-2\n",
-					   "sudo yum -y install docker\n",
+                       "sudo yum -y install docker\n",
                        "sudo gpasswd -a ec2-user docker\n",
-					   "sudo su ec2-user\n",
+                       "sudo su ec2-user\n",
                        "sudo service docker restart\n",
                        "docker pull luckylittle/aws-cloudformation-nodejs\n",
                        "docker run -p 8080:8080 -d luckylittle/aws-cloudformation-nodejs\n",
-					   "sudo /opt/aws/bin/cfn-signal -e $?",
-                       " --stack ", { "Ref" : "AWS::StackName" },
+                       "sudo /opt/aws/bin/cfn-signal -e $?",
+                       " --stack ", {"Ref": "AWS::StackName"},
                        " --resource ServerGroup",
                        " --region ap-southeast-2\n"
         ]]}}
       }
-	}
-},
+    }
+  },
 
   "Outputs": {
     "WebsiteURL": {
-      "Value": { "Fn::Join": ["", ["http://", { "Fn::GetAtt": [ "ELB", "DNSName" ]}, "/" ]]},
+      "Value": {"Fn::Join": ["", ["http://", { "Fn::GetAtt": [ "ELB", "DNSName" ]}, "/" ]]},
       "Description": "NODE.JS HELLO WORLD INSIDE DOCKER BEHIND ELB!"
     }
   }
