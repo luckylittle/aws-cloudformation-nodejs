@@ -1,6 +1,6 @@
 ### Synopsis:
-__2016-07-02__
-__Latest version: 1.5__
+__2016-07-02__;
+__Latest version: 1.5__;
 This was created for an interview with Francis Naoum from AMP.
 
 ### Task:
