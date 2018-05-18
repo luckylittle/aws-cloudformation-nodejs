@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: THIS IS FOR INTERVIEW WITH AMP <francis_naoum@amp.com.au> VERSION 1.5
+Parameters:
+  KeyName:
+    Description: Existing EC2 Key Pair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: MUST BE THE NAME OF AN EXISTING KEYPAIR IN THE SYDNEY REGION!
+Mappings: {}
+Resources:
+  ELB:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      CrossZone: 'true'
+      AvailabilityZones: !GetAZs ''
+      Listeners:
+        - LoadBalancerPort: '80'
+          InstancePort: '8080'
+          Protocol: HTTP
+      HealthCheck:
+        Target: HTTP:8080/
+        HealthyThreshold: '2'
+        UnhealthyThreshold: '10'
+        Interval: '30'
+        Timeout: '5'
+  NodejsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 8080 locked down to the ELB and
+        SSH access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '8080'
+          ToPort: '8080'
+          SourceSecurityGroupOwnerId: !GetAtt 'ELB.SourceSecurityGroup.OwnerAlias'
+          SourceSecurityGroupName: !GetAtt 'ELB.SourceSecurityGroup.GroupName'
+  ServerGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones: !GetAZs ''
+      LaunchConfigurationName: !Ref 'Nodejs'
+      MinSize: '1'
+      MaxSize: '1'
+      LoadBalancerNames:
+        - !Ref 'ELB'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
+        Count: '1'
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: '1'
+        MaxBatchSize: '1'
+        PauseTime: PT15M
+        WaitOnResourceSignals: 'true'
+  Nodejs:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Join ['', ["[main]\n", stack=, !Ref 'AWS::StackId', "\n",
+                  "region=ap-southeast-2\n"]]
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Join ['', ["[cfn-auto-reloader-hook]\n", "triggers=post.update\n",
+                  "path=Resources.Nodejs.Metadata.AWS::CloudFormation::Init\n", 'action=/opt/aws/bin/cfn-init
+                    -v ', ' --stack ', !Ref 'AWS::StackName', ' --resource Nodejs ',
+                  " --region ap-southeast-2\n", "runas=root\n"]]
+              mode: '000400'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+    Properties:
+      ImageId: ami-dc361ebf
+      InstanceType: t2.micro
+      SecurityGroups:
+        - !Ref 'NodejsSecurityGroup'
+      KeyName: !Ref 'KeyName'
+      UserData: !Base64
+        Fn::Join:
+          - ''
+          - - "#!/bin/bash\n"
+            - "sudo yum update -y aws-cfn-bootstrap\n"
+            - 'sudo /opt/aws/bin/cfn-init -v '
+            - ' --stack '
+            - !Ref 'AWS::StackName'
+            - ' --resource Nodejs'
+            - " --region ap-southeast-2\n"
+            - "sudo yum -y install docker\n"
+            - "sudo gpasswd -a ec2-user docker\n"
+            - "sudo su ec2-user\n"
+            - "sudo service docker restart\n"
+            - "docker pull luckylittle/aws-cloudformation-nodejs\n"
+            - "docker run -p 8080:8080 -d luckylittle/aws-cloudformation-nodejs\n"
+            - sudo /opt/aws/bin/cfn-signal -e $?
+            - ' --stack '
+            - !Ref 'AWS::StackName'
+            - ' --resource ServerGroup'
+            - " --region ap-southeast-2\n"
+Outputs:
+  WebsiteURL:
+    Value: !Join ['', ['http://', !GetAtt 'ELB.DNSName', /]]
+    Description: NODE.JS HELLO WORLD INSIDE DOCKER BEHIND ELB!
